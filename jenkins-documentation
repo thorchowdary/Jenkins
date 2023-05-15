@@ -1,0 +1,206 @@
+CICD(Continous integration and continous delivary)
+---------------------------------------------------
+CI flow:
+    developer develops the code -->pushed to SCM(source code management)(Github)--devops guy took that code from scm and made a packages(zip,tgz,war etc...) and stored in artifactory(s3)
+    
+    when we making the package and uploading to artifactory:
+    --------------------------------------------------------
+    do append the $BUILD_NUMBER to the file because if something happens to the new package after deploying in the server we revert back with working/previous package which is there in artifactory.\
+        ex:
+            filename_$BUILD_NUMBER.zip
+            echo $BUILD_NUMBER
+
+CD flow:
+    took/downloaded the repective package from s3 and unziped it and deployed it into repectice servers
+
+example:
+    1.apache(httpd)---/var/www/html
+    2.nginx---- /usr/share/nginx/html
+    3.apaceh-tomcat ---- apache-tomcat-version/webapps/
+
+jenkins setup:
+-----------------
+1.java should be there
+2.prefered is c-series instance type
+
+jenkins home: /var/lib/jenkins
+you can see all the jobs at jenkins home
+
+check locally :/var/lib/jenkins/workspace/jobname
+
+stages in jenkins:
+-----------------
+1.source code management(SCM):
+    a. will provide the github url(https/ssh)
+    b. branch which branch code should it take
+    c. credentials(if we go with ssh we will copy jenkins user ssh public key to the github so no need any credentials also)
+        --->to test connection
+            1. ssh -v git@github.com --ssh in debug mode
+            2. ssh -T git@github.com ---to test ssh connection
+
+2.Build Triggers(we can define when job should trigger)
+    in this stage we can choose like
+        a.Trigger builds remotely (e.g., from scripts)
+        b.Build after other projects are built
+        c.Build periodically
+            1.we can shedule ajob to run at particular time intervals(cron job)
+        d.GitHub hook trigger for GITScm polling
+            will meke a connection in github web-hooks
+            with this whenever we made a commit to our branch the build will trigger
+            steps:
+                add jenkins url by appending with "/github-webhook/"
+                example: 
+                    http://jenkins-lb-557324460.ap-south-1.elb.amazonaws.com/github-webhook/
+
+        e.Poll SCM
+            this one if keeps checking for given interval of time is there any commit happend
+            to the repo id yes it will build job
+                cron tab:
+                --------
+                    min hour date month day_of_week,command
+                    1    *    *    * --->every min 
+3.Build Steps 
+    in this we can write the shell scrpts, to tell what job should do when we build it 
+
+4.Post-build Actions 
+    we can define like 
+        1. build other projects if build is stable 
+        2. sending a email
+        3. delete the workspace when build is done
+
+* we can increase the build executers status
+    manage jenkins--configure system---# of executors(change the value here)
+
+plugins used in jenkins:
+---------------------------
+1.job conifguration history plugin: 
+    Job history plugin for Jenkins, like who created and if some one deleted who deleted it and what jobs did they build all kind of history will be there if we add this plugin to jenkins
+
+2.safe restart
+    whenever we do restart, all the jobs which are running will be exited, so inorder no to loose the jobs which are running we use "safe restart" this will make sure to keep hold of running jobs in jenkins
+
+3.maven blue ocean:
+    helps in visualization of jobs and their status
+
+4.Build Pipeline Plugin:
+    With the build pipeline plugin, you can create a pipeline view of incoming and outgoing jobs, and create triggers which require manual intervention.
+
+5.Amazon ec2-agent plugin:
+    automatically the instance will get created when the job is triggured/build
+
+6.thinbackup
+7.convert_to_pipeline
+    it will convert freestyle job to pipeline job
+
+backup of jenkins:
+------------------
+go to this path /var/lib/jenkins
+and do:
+------
+tar -cvzf jenkins.tgz /var/lib/jenkins
+aws s3 cp jenkins.tgz s3://bucketName/
+
+upstream and downstream:
+------------------------
+suppose we have two jobs job1 and job2 we have configured in such away that job2 has to be build if job1 got success
+    -->building job1 is "upstream"
+    -->building job2 after building job1 is "downstream"
+
+master slave in jenkins:
+------------------------
+we go with this approach to reduce the laod on jenkins master 
+slave/agents/nodes/runners
+
+****slave is another ec2
+
+steps to configure master slave:
+---------------------------------
+Dashboard---manage jenkins----manage nodes & clouds--create node
+
+Launch method
+    - launch agents via ssh
+        Host---private ip address of ec2(to get that use command hostname -i)
+    - Credentials
+        add credentials
+            1. kind -- ssh username with private key
+            2 .ID can be any name
+            3. Description -- breif about the credentials
+            4. Username -- how you want to create this agent
+                ex: root,ec2-user etc..
+                    a. create ssh keys using ssh-keygen command
+                        if you create ssh keys as root user use the same user in username as well
+                        copy the private key in "private key field" and save it
+
+            *** now in ec2 the place where you did ssh-keygen and copied private key in pricate key field also you copy the public key in autharized keys then on ssh connection will be sucessfull
+
+
+* we configure the master in such a way thay the jobs creation is done in master but he execution is     given to the slave
+* we will divide the slaves based on application-language
+* if java application then java-agent all jobs related to java it will be directed to the java-agent/slave
+no need of insatlling jenkins in  again in slave just required application supported packages has to be downloaded
+
+example:
+    java,git,maven,AWS CLI in java agent
+    git,python etc.. in python agent
+
+* 1 master can have more slaves no limit
+
+tools in jenkins:
+-----------------
+maven maven_home /opt/maven
+java java_home /opt/jave
+sonarcube ----> we need to add a plugin 
+nexus
+
+we can configure tools like in maven,jave at "Global tool configuration" or we can install manually and map to that
+
+* we can multiple jave version in one project it will be helpfull in if one project uses java10 and another project uses java11 we can use that
+
+hostname -i --> to get the ip address
+
+jenkins pipeline:
+-----------------
+* instead of GUI we are writing jenkins file(pipeline)
+we map the same jenkins file while creating the pipeline as well
+* we are going with pipeline becuase we will follow *GITOPS* thing what it means like don't do anything manually do with SCM becuase we can track the actions like who did that/deleted/modified and also it is easy to create ci-cd with pipeline just we need to map the jenkinsfile to the job, if there is no pipeline thing all the time we need to do it manually it will take time, if one environment one project it si fine what if we go with 100,1000's.
+
+keywords:
+--------
+pipeline,agent,params,environment,stages,stage,when,script(sh) etc.....
+
+two types of pipeline
+1.scripted pipeline -- intial -- node {} -- programatic way
+2.declarative pipeline -- advanced --- pipeline{} --shell script
+    
+    -->the above two follow grovy language
+
+groovy --- jenkins
+* shell script converts to groovy language 
+
+declarative pipeline syntax:
+---------------------------
+pipeline {
+    agent any
+    stages {
+        stage('Hello1') {
+            steps {
+                echo 'Hello World'
+            }
+        }
+        stage('Hello2') {
+            steps {
+                echo 'Hello World2'
+            }
+        }
+    }
+}
+
+* we can have multi stages
+
+
+
+sudo su - jenkins -- to switch to jenkins user
+ssh -v git@github.com --ssh in debug mode
+ssh -T git@github.com ---to test ssh connection
+
+
