@@ -192,6 +192,28 @@ pipeline {
                 echo 'Hello World2'
             }
         }
+           post {
+        always {
+            // Actions to execute regardless of build result
+        }
+        success {
+            // Actions to execute on build success
+        }
+        failure {
+            // Actions to execute on build failure
+        }
+        unstable {
+            // Actions to execute on unstable build
+        }
+        changed {
+            // Actions to execute if build result changed from previous
+        }
+        aborted {
+            // Actions to execute if build was aborted
+        }
+        // More conditions can be added as per your requirements
+    }
+        
     }
 }
 
